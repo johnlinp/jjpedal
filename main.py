@@ -55,6 +55,18 @@ def sample_to_int(sample):
     else:
         return num
 
+def int_to_sample(num):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    negative = num < 0
+    if negative:
+        num += 0x8000
+    byte0 = num & 0x00FF
+    byte1 = (num & 0xFF00) >> 8
+    if negative:
+        byte1 |= 0x80
+    sample = chr(byte0) + chr(byte1)
+    return sample
+
 def raw_to_list(samples):
     assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
     res = []
@@ -64,6 +76,7 @@ def raw_to_list(samples):
         sample = samples[idx * width : (idx + 1) * width]
         num = sample_to_int(sample)
         assert num == audioop.getsample(samples, width, idx)
+        assert int_to_sample(num) == sample
         res.append(num)
     return res
 
