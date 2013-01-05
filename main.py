@@ -3,15 +3,19 @@ import alsaaudio
 
 def init_pcm(pcm):
     pcm.setchannels(1)
-    pcm.setrate(96000)
+    pcm.setrate(44100)
     pcm.setformat(alsaaudio.PCM_FORMAT_S16_LE)
     pcm.setperiodsize(160)
 
-def play_on_the_fly():
+def play_music(dst_fname=None):
     print 'now play your guitar!'
+    if dst_fname is not None:
+        print 'recording: ' + dst_fname
 
     inputt = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
     output = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
+    if dst_fname is not None:
+        dst_fw = open(dst_fname, 'w')
 
     init_pcm(inputt)
     init_pcm(output)
@@ -20,15 +24,14 @@ def play_on_the_fly():
         l, data = inputt.read()
         if l:
             output.write(data)
+            if dst_fname is not None:
+                dst_fw.write(data)
 
 def watch_histogram(src_fname):
     print 'watch histogram of ' + src_fname
 
 def play_file(src_fname):
     print 'play ' + src_fname
-
-def record_file(dst_fname):
-    print 'record ' + dst_fname
 
 def print_usage():
     print 'usage:'
@@ -70,9 +73,9 @@ def main(argv):
         else:
             play_file(src_fname)
     elif src_fname == None and dst_fname != None and not histogram:
-        record_file(dst_fname)
+        play_music(dst_fname)
     elif src_fname == None and dst_fname == None and not histogram:
-        play_on_the_fly()
+        play_music()
     else:
         print_usage()
 
