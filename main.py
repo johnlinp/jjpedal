@@ -1,16 +1,17 @@
 import sys
 import time
-import alsaaudio
+import alsaaudio, audioop
 from matplotlib import pyplot
 
 PCM_RATE = 44100
 PCM_PERIOD_SIZE = 160
+PCM_FORMAT = alsaaudio.PCM_FORMAT_S16_LE
 READ_BUF_LENGTH = 200
 
 def init_pcm(pcm):
     pcm.setchannels(1)
     pcm.setrate(PCM_RATE)
-    pcm.setformat(alsaaudio.PCM_FORMAT_S16_LE)
+    pcm.setformat(PCM_FORMAT)
     pcm.setperiodsize(PCM_PERIOD_SIZE)
 
 def play_music(src_fname=None, dst_fname=None):
@@ -43,6 +44,18 @@ def play_music(src_fname=None, dst_fname=None):
                 dst_fw.write(data)
     print 'finished'
 
+def raw_to_list(data):
+    res = []
+    if PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE:
+        width = 2
+    else:
+        assert False
+    num_samples = len(data) / width
+    for idx in range(num_samples):
+        datum = audioop.getsample(data, width, idx)
+        res.append(datum)
+    return res
+
 def watch_histogram(src_fname):
     print 'watch histogram of ' + src_fname
     src_fr = open(src_fname, 'r')
@@ -54,7 +67,7 @@ def watch_histogram(src_fname):
     pyplot.ylabel('Amplification')
     pyplot.xlabel('Time')
     pyplot.axhline(color='black')
-    pyplot.ylim(-128, 128)
+    pyplot.ylim(-4096, 4096)
     lines = pyplot.plot([0], 'blue')
     while True:
         data = src_fr.read(READ_BUF_LENGTH * PCM_PERIOD_SIZE)
@@ -62,8 +75,7 @@ def watch_histogram(src_fname):
             break
 
         lines[0].remove()
-        line = [ord(x) if ord(x) < 128 else ord(x) - 256 for x in data[0:PCM_PERIOD_SIZE]]
-        lines = pyplot.plot(line, 'blue')
+        lines = pyplot.plot(raw_to_list(data), 'blue')
         pyplot.draw()
 
         idx = 0
