@@ -69,7 +69,9 @@ def distortion(samples):
         numbers[idx] *= DISTORTION_MULTI
     return list_to_raw(numbers)
 
-def play_music(src_fname=None, dst_fname=None):
+def play_music(src_fname=None, dst_fname=None, effects=None):
+    if effects == None:
+        effects = []
     if src_fname is not None:
         print 'playing: ' + src_fname
         src_fr = open(src_fname, 'r')
@@ -94,7 +96,8 @@ def play_music(src_fname=None, dst_fname=None):
         else:
             length, samples = inputt.read()
         if length:
-            samples = distortion(samples)
+            for eff in effects:
+                samples = eff(samples)
             output.write(samples)
             if dst_fname is not None:
                 dst_fw.write(samples)
@@ -141,12 +144,15 @@ def print_usage():
     print '        python main.py -i filename.jj'
     print '    . watching the histogram'
     print '        python main.py -i filename.jj -h'
+    print '    . add distortion effect'
+    print '        python main.py -e distortion'
     exit()
 
 def main(argv):
     src_fname = None
     dst_fname = None
     histogram = False
+    effects = []
     idx = 1
     while idx < len(argv):
         if argv[idx] == '-i':
@@ -161,6 +167,14 @@ def main(argv):
             idx += 1
         elif argv[idx] == '-h':
             histogram = True
+        elif argv[idx] == '-e':
+            if idx >= len(argv) - 1:
+                print_usage()
+            if argv[idx + 1] == 'distortion':
+                effects.append(distortion)
+            else:
+                print_usage()
+            idx += 1
         else:
             print_usage()
         idx += 1
@@ -169,11 +183,11 @@ def main(argv):
         if histogram:
             watch_histogram(src_fname)
         else:
-            play_music(src_fname=src_fname)
+            play_music(src_fname=src_fname, effects=effects)
     elif src_fname == None and dst_fname != None and not histogram:
-        play_music(dst_fname=dst_fname)
+        play_music(dst_fname=dst_fname, effects=effects)
     elif src_fname == None and dst_fname == None and not histogram:
-        play_music()
+        play_music(effects=effects)
     else:
         print_usage()
 
