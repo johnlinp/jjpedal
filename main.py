@@ -44,16 +44,27 @@ def play_music(src_fname=None, dst_fname=None):
                 dst_fw.write(data)
     print 'finished'
 
-def raw_to_list(data):
-    res = []
-    if PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE:
-        width = 2
+def sample_to_int(sample):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    byte0 = ord(sample[0])
+    byte1 = ord(sample[1])
+    num = (byte0 | (byte1 << 8)) & 0x7FFF
+    negative = (byte0 | (byte1 << 8)) & 0x8000
+    if negative:
+        return num - 0x8000
     else:
-        assert False
+        return num
+
+def raw_to_list(data):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    res = []
+    width = 2
     num_samples = len(data) / width
     for idx in range(num_samples):
-        datum = audioop.getsample(data, width, idx)
-        res.append(datum)
+        datum = data[idx * width : (idx + 1) * width]
+        num = sample_to_int(datum)
+        assert num == audioop.getsample(data, width, idx)
+        res.append(num)
     return res
 
 def watch_histogram(src_fname):
@@ -80,7 +91,7 @@ def watch_histogram(src_fname):
 
         idx = 0
         while idx < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
-            output.write(data[idx:idx + PCM_PERIOD_SIZE])
+            output.write(data[idx : idx + PCM_PERIOD_SIZE])
             idx += PCM_PERIOD_SIZE
     print 'finished'
 
