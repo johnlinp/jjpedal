@@ -7,25 +7,35 @@ def init_pcm(pcm):
     pcm.setformat(alsaaudio.PCM_FORMAT_S16_LE)
     pcm.setperiodsize(160)
 
-def play_music(dst_fname=None):
-    print 'now play your guitar!'
+def play_music(src_fname=None, dst_fname=None):
+    if src_fname is not None:
+        print 'playing: ' + src_fname
+        src_fr = open(src_fname, 'r')
+    else:
+        print 'now play your guitar!'
+        inputt = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
+        init_pcm(inputt)
+
     if dst_fname is not None:
         print 'recording: ' + dst_fname
-
-    inputt = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
-    output = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
-    if dst_fname is not None:
         dst_fw = open(dst_fname, 'w')
 
-    init_pcm(inputt)
+    output = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
     init_pcm(output)
 
     while True:
-        l, data = inputt.read()
+        if src_fname is not None:
+            data = src_fr.read(160)
+            if data == '':
+                break
+            l = True
+        else:
+            l, data = inputt.read()
         if l:
             output.write(data)
             if dst_fname is not None:
                 dst_fw.write(data)
+    print 'finished'
 
 def watch_histogram(src_fname):
     print 'watch histogram of ' + src_fname
@@ -71,9 +81,9 @@ def main(argv):
         if histogram:
             watch_histogram(src_fname)
         else:
-            play_file(src_fname)
+            play_music(src_fname=src_fname)
     elif src_fname == None and dst_fname != None and not histogram:
-        play_music(dst_fname)
+        play_music(dst_fname=dst_fname)
     elif src_fname == None and dst_fname == None and not histogram:
         play_music()
     else:
