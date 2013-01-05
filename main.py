@@ -3,11 +3,15 @@ import time
 import alsaaudio
 from matplotlib import pyplot
 
+PCM_RATE = 44100
+PCM_PERIOD_SIZE = 160
+READ_BUF_LENGTH = 200
+
 def init_pcm(pcm):
     pcm.setchannels(1)
-    pcm.setrate(44100)
+    pcm.setrate(PCM_RATE)
     pcm.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-    pcm.setperiodsize(160)
+    pcm.setperiodsize(PCM_PERIOD_SIZE)
 
 def play_music(src_fname=None, dst_fname=None):
     if src_fname is not None:
@@ -27,7 +31,7 @@ def play_music(src_fname=None, dst_fname=None):
 
     while True:
         if src_fname is not None:
-            data = src_fr.read(160)
+            data = src_fr.read(PCM_PERIOD_SIZE)
             if data == '':
                 break
             l = True
@@ -53,18 +57,19 @@ def watch_histogram(src_fname):
     pyplot.ylim(-128, 128)
     lines = pyplot.plot([0], 'blue')
     while True:
-        data = src_fr.read(16000)
-        if len(data) < 16000:
+        data = src_fr.read(READ_BUF_LENGTH * PCM_PERIOD_SIZE)
+        if len(data) < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
             break
-        idx = 0
-        while idx < 16000:
-            output.write(data[idx:idx + 160])
-            idx += 160
-        time.sleep(0.5)
+
         lines[0].remove()
-        line = [ord(x) if ord(x) < 128 else ord(x) - 256 for x in data]
+        line = [ord(x) if ord(x) < 128 else ord(x) - 256 for x in data[0:PCM_PERIOD_SIZE]]
         lines = pyplot.plot(line, 'blue')
         pyplot.draw()
+
+        idx = 0
+        while idx < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
+            output.write(data[idx:idx + PCM_PERIOD_SIZE])
+            idx += PCM_PERIOD_SIZE
     print 'finished'
 
 def play_file(src_fname):
