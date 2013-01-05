@@ -1,15 +1,77 @@
 import sys
 import time
-import alsaaudio
+import alsaaudio, audioop
 from matplotlib import pyplot
+
+PCM_RATE = 44100
+PCM_PERIOD_SIZE = 160
+PCM_FORMAT = alsaaudio.PCM_FORMAT_S16_LE
+READ_BUF_0LENGTH = 200
+DISTORTION_CUTOFF = 100
+DISTORTION_MULTI = 3
 
 def init_pcm(pcm):
     pcm.setchannels(1)
-    pcm.setrate(44100)
-    pcm.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-    pcm.setperiodsize(160)
+    pcm.setrate(PCM_RATE)
+    pcm.setformat(PCM_FORMAT)
+    pcm.setperiodsize(PCM_PERIOD_SIZE)
 
-def play_music(src_fname=None, dst_fname=None):
+def sample_to_int(sample):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    byte0 = ord(sample[0])
+    byte1 = ord(sample[1])
+    num = (byte0 | (byte1 << 8)) & 0x7FFF
+    negative = (byte0 | (byte1 << 8)) & 0x8000
+    if negative:
+        return num - 0x8000
+    else:
+        return num
+
+def int_to_sample(num):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    negative = num < 0
+    if negative:
+        num += 0x8000
+    byte0 = num & 0x00FF
+    byte1 = (num & 0xFF00) >> 8
+    if negative:
+        byte1 |= 0x80
+    sample = chr(byte0) + chr(byte1)
+    return sample
+
+def raw_to_list(samples):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    res = []
+    width = 2
+    num_samples = len(samples) / width
+    for idx in range(num_samples):
+        sample = samples[idx * width : (idx + 1) * width]
+        num = sample_to_int(sample)
+        assert num == audioop.getsample(samples, width, idx)
+        assert int_to_sample(num) == sample
+        res.append(num)
+    return res
+
+def list_to_raw(numbers):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    res = ''
+    for num in numbers:
+        res += int_to_sample(num)
+    return res
+
+def distortion(samples):
+    numbers = raw_to_list(samples)
+    for idx, num in enumerate(numbers):
+        if num > DISTORTION_CUTOFF:
+            numbers[idx] = DISTORTION_CUTOFF
+        elif num < -DISTORTION_CUTOFF:
+            numbers[idx] = -DISTORTION_CUTOFF
+        numbers[idx] *= DISTORTION_MULTI
+    return list_to_raw(numbers)
+
+def play_music(src_fname=None, dst_fname=None, effects=None):
+    if effects == None:
+        effects = []
     if src_fname is not None:
         print 'playing: ' + src_fname
         src_fr = open(src_fname, 'r')
@@ -27,16 +89,18 @@ def play_music(src_fname=None, dst_fname=None):
 
     while True:
         if src_fname is not None:
-            data = src_fr.read(160)
-            if data == '':
+            samples = src_fr.read(PCM_PERIOD_SIZE)
+            if samples == '':
                 break
-            l = True
+            length = True
         else:
-            l, data = inputt.read()
-        if l:
-            output.write(data)
+            length, samples = inputt.read()
+        if length:
+            for eff in effects:
+                samples = eff(samples)
+            output.write(samples)
             if dst_fname is not None:
-                dst_fw.write(data)
+                dst_fw.write(samples)
     print 'finished'
 
 def watch_histogram(src_fname):
@@ -50,21 +114,21 @@ def watch_histogram(src_fname):
     pyplot.ylabel('Amplification')
     pyplot.xlabel('Time')
     pyplot.axhline(color='black')
-    pyplot.ylim(-128, 128)
+    pyplot.ylim(-4096, 4096)
     lines = pyplot.plot([0], 'blue')
     while True:
-        data = src_fr.read(16000)
-        if len(data) < 16000:
+        samples = src_fr.read(READ_BUF_LENGTH * PCM_PERIOD_SIZE)
+        if len(samples) < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
             break
-        idx = 0
-        while idx < 16000:
-            output.write(data[idx:idx + 160])
-            idx += 160
-        time.sleep(0.5)
+
         lines[0].remove()
-        line = [ord(x) if ord(x) < 128 else ord(x) - 256 for x in data]
-        lines = pyplot.plot(line, 'blue')
+        lines = pyplot.plot(raw_to_list(samples), 'blue')
         pyplot.draw()
+
+        idx = 0
+        while idx < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
+            output.write(samples[idx : idx + PCM_PERIOD_SIZE])
+            idx += PCM_PERIOD_SIZE
     print 'finished'
 
 def play_file(src_fname):
@@ -80,12 +144,15 @@ def print_usage():
     print '        python main.py -i filename.jj'
     print '    . watching the histogram'
     print '        python main.py -i filename.jj -h'
+    print '    . add distortion effect'
+    print '        python main.py -e distortion'
     exit()
 
 def main(argv):
     src_fname = None
     dst_fname = None
     histogram = False
+    effects = []
     idx = 1
     while idx < len(argv):
         if argv[idx] == '-i':
@@ -100,6 +167,14 @@ def main(argv):
             idx += 1
         elif argv[idx] == '-h':
             histogram = True
+        elif argv[idx] == '-e':
+            if idx >= len(argv) - 1:
+                print_usage()
+            if argv[idx + 1] == 'distortion':
+                effects.append(distortion)
+            else:
+                print_usage()
+            idx += 1
         else:
             print_usage()
         idx += 1
@@ -108,11 +183,11 @@ def main(argv):
         if histogram:
             watch_histogram(src_fname)
         else:
-            play_music(src_fname=src_fname)
+            play_music(src_fname=src_fname, effects=effects)
     elif src_fname == None and dst_fname != None and not histogram:
-        play_music(dst_fname=dst_fname)
+        play_music(dst_fname=dst_fname, effects=effects)
     elif src_fname == None and dst_fname == None and not histogram:
-        play_music()
+        play_music(effects=effects)
     else:
         print_usage()
 
