@@ -32,16 +32,16 @@ def play_music(src_fname=None, dst_fname=None):
 
     while True:
         if src_fname is not None:
-            data = src_fr.read(PCM_PERIOD_SIZE)
-            if data == '':
+            samples = src_fr.read(PCM_PERIOD_SIZE)
+            if samples == '':
                 break
-            l = True
+            length = True
         else:
-            l, data = inputt.read()
-        if l:
-            output.write(data)
+            length, samples = inputt.read()
+        if length:
+            output.write(samples)
             if dst_fname is not None:
-                dst_fw.write(data)
+                dst_fw.write(samples)
     print 'finished'
 
 def sample_to_int(sample):
@@ -55,15 +55,15 @@ def sample_to_int(sample):
     else:
         return num
 
-def raw_to_list(data):
+def raw_to_list(samples):
     assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
     res = []
     width = 2
-    num_samples = len(data) / width
+    num_samples = len(samples) / width
     for idx in range(num_samples):
-        datum = data[idx * width : (idx + 1) * width]
-        num = sample_to_int(datum)
-        assert num == audioop.getsample(data, width, idx)
+        sample = samples[idx * width : (idx + 1) * width]
+        num = sample_to_int(sample)
+        assert num == audioop.getsample(samples, width, idx)
         res.append(num)
     return res
 
@@ -81,17 +81,17 @@ def watch_histogram(src_fname):
     pyplot.ylim(-4096, 4096)
     lines = pyplot.plot([0], 'blue')
     while True:
-        data = src_fr.read(READ_BUF_LENGTH * PCM_PERIOD_SIZE)
-        if len(data) < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
+        samples = src_fr.read(READ_BUF_LENGTH * PCM_PERIOD_SIZE)
+        if len(samples) < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
             break
 
         lines[0].remove()
-        lines = pyplot.plot(raw_to_list(data), 'blue')
+        lines = pyplot.plot(raw_to_list(samples), 'blue')
         pyplot.draw()
 
         idx = 0
         while idx < READ_BUF_LENGTH * PCM_PERIOD_SIZE:
-            output.write(data[idx : idx + PCM_PERIOD_SIZE])
+            output.write(samples[idx : idx + PCM_PERIOD_SIZE])
             idx += PCM_PERIOD_SIZE
     print 'finished'
 
