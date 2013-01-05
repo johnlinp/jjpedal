@@ -1,5 +1,7 @@
 import sys
+import time
 import alsaaudio
+from matplotlib import pyplot
 
 def init_pcm(pcm):
     pcm.setchannels(1)
@@ -39,6 +41,31 @@ def play_music(src_fname=None, dst_fname=None):
 
 def watch_histogram(src_fname):
     print 'watch histogram of ' + src_fname
+    src_fr = open(src_fname, 'r')
+
+    output = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
+    init_pcm(output)
+
+    pyplot.ion()
+    pyplot.ylabel('Amplification')
+    pyplot.xlabel('Time')
+    pyplot.axhline(color='black')
+    pyplot.ylim(-128, 128)
+    lines = pyplot.plot([0], 'blue')
+    while True:
+        data = src_fr.read(16000)
+        if len(data) < 16000:
+            break
+        idx = 0
+        while idx < 16000:
+            output.write(data[idx:idx + 160])
+            idx += 160
+        time.sleep(0.5)
+        lines[0].remove()
+        line = [ord(x) if ord(x) < 128 else ord(x) - 256 for x in data]
+        lines = pyplot.plot(line, 'blue')
+        pyplot.draw()
+    print 'finished'
 
 def play_file(src_fname):
     print 'play ' + src_fname
