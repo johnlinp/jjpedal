@@ -6,43 +6,15 @@ from matplotlib import pyplot
 PCM_RATE = 44100
 PCM_PERIOD_SIZE = 160
 PCM_FORMAT = alsaaudio.PCM_FORMAT_S16_LE
-READ_BUF_LENGTH = 200
+READ_BUF_0LENGTH = 200
+DISTORTION_CUTOFF = 100
+DISTORTION_MULTI = 3
 
 def init_pcm(pcm):
     pcm.setchannels(1)
     pcm.setrate(PCM_RATE)
     pcm.setformat(PCM_FORMAT)
     pcm.setperiodsize(PCM_PERIOD_SIZE)
-
-def play_music(src_fname=None, dst_fname=None):
-    if src_fname is not None:
-        print 'playing: ' + src_fname
-        src_fr = open(src_fname, 'r')
-    else:
-        print 'now play your guitar!'
-        inputt = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
-        init_pcm(inputt)
-
-    if dst_fname is not None:
-        print 'recording: ' + dst_fname
-        dst_fw = open(dst_fname, 'w')
-
-    output = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
-    init_pcm(output)
-
-    while True:
-        if src_fname is not None:
-            samples = src_fr.read(PCM_PERIOD_SIZE)
-            if samples == '':
-                break
-            length = True
-        else:
-            length, samples = inputt.read()
-        if length:
-            output.write(samples)
-            if dst_fname is not None:
-                dst_fw.write(samples)
-    print 'finished'
 
 def sample_to_int(sample):
     assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
@@ -79,6 +51,54 @@ def raw_to_list(samples):
         assert int_to_sample(num) == sample
         res.append(num)
     return res
+
+def list_to_raw(numbers):
+    assert PCM_FORMAT == alsaaudio.PCM_FORMAT_S16_LE
+    res = ''
+    for num in numbers:
+        res += int_to_sample(num)
+    return res
+
+def distortion(samples):
+    numbers = raw_to_list(samples)
+    for idx, num in enumerate(numbers):
+        if num > DISTORTION_CUTOFF:
+            numbers[idx] = DISTORTION_CUTOFF
+        elif num < -DISTORTION_CUTOFF:
+            numbers[idx] = -DISTORTION_CUTOFF
+        numbers[idx] *= DISTORTION_MULTI
+    return list_to_raw(numbers)
+
+def play_music(src_fname=None, dst_fname=None):
+    if src_fname is not None:
+        print 'playing: ' + src_fname
+        src_fr = open(src_fname, 'r')
+    else:
+        print 'now play your guitar!'
+        inputt = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK)
+        init_pcm(inputt)
+
+    if dst_fname is not None:
+        print 'recording: ' + dst_fname
+        dst_fw = open(dst_fname, 'w')
+
+    output = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
+    init_pcm(output)
+
+    while True:
+        if src_fname is not None:
+            samples = src_fr.read(PCM_PERIOD_SIZE)
+            if samples == '':
+                break
+            length = True
+        else:
+            length, samples = inputt.read()
+        if length:
+            samples = distortion(samples)
+            output.write(samples)
+            if dst_fname is not None:
+                dst_fw.write(samples)
+    print 'finished'
 
 def watch_histogram(src_fname):
     print 'watch histogram of ' + src_fname
