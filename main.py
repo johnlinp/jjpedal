@@ -2,13 +2,17 @@ import sys
 import time
 import alsaaudio, audioop
 from matplotlib import pyplot
+from numpy import fft
+from scipy import signal
+import numpy
+import math
 
 PCM_RATE = 44100
 PCM_PERIOD_SIZE = 160
 PCM_FORMAT = alsaaudio.PCM_FORMAT_S16_LE
-READ_BUF_0LENGTH = 200
+READ_BUF_LENGTH = 200
 DISTORTION_CUTOFF = 100
-DISTORTION_MULTI = 3
+DISTORTION_MULTI = 5
 
 def init_pcm(pcm):
     pcm.setchannels(1)
@@ -68,6 +72,29 @@ def distortion(samples):
             numbers[idx] = -DISTORTION_CUTOFF
         numbers[idx] *= DISTORTION_MULTI
     return list_to_raw(numbers)
+
+alpha = [0.0]
+prev_y = []
+def wahwah(samples):
+    numbers = raw_to_list(samples)
+
+    delay = 10
+    R = 0.9
+    y = [0]*len(numbers)
+    output = [0]*len(numbers)
+    for n in range(0,len(numbers)):
+        alpha[0]  += 0.0001
+        fb = numpy.complex(math.cos(alpha[0]),math.sin(alpha[0]))
+        if(n-delay<0):
+            if len(prev_y) == 0:
+                y[n] = numbers[n]*(1-fb)
+            else:
+                y[n] = prev_y[n-delay]*R*fb + numbers[n]*(1-fb)
+        else:
+            y[n] = y[n-delay]*R*fb + numbers[n]*(1-fb)
+        output[n] = int(float(y[n].real))
+    prev_y[:] = y[-delay:]
+    return list_to_raw(output)
 
 def play_music(src_fname=None, dst_fname=None, effects=None):
     if effects == None:
@@ -172,6 +199,8 @@ def main(argv):
                 print_usage()
             if argv[idx + 1] == 'distortion':
                 effects.append(distortion)
+            elif argv[idx + 1] == 'wahwah':
+                effects.append(wahwah)
             else:
                 print_usage()
             idx += 1
@@ -188,6 +217,8 @@ def main(argv):
         play_music(dst_fname=dst_fname, effects=effects)
     elif src_fname == None and dst_fname == None and not histogram:
         play_music(effects=effects)
+    elif src_fname != None and dst_fname != None and not histogram:
+        play_music(src_fname=src_fname, dst_fname=dst_fname, effects=effects)
     else:
         print_usage()
 
